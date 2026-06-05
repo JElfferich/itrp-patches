@@ -1,0 +1,568 @@
+diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/lang/en_us.lang" "iterationRP Alpha 0.8.22 patched/shaders/lang/en_us.lang"
+--- "iterationRP Alpha 0.8.22/shaders/lang/en_us.lang"	2026-05-07 00:04:10.000000000 +0200
++++ "iterationRP Alpha 0.8.22 patched/shaders/lang/en_us.lang"	2026-06-05 14:12:16.574247963 +0200
+@@ -655,6 +655,14 @@
+ option.TONEMAP_OPERATOR=§cTonemap
+ value.TONEMAP_OPERATOR.GT=GT(Uchimura)
+ value.TONEMAP_OPERATOR.None=None
++option.OPENDRT_PRESET=OpenDRT Preset
++value.OPENDRT_PRESET.OPENDRT_PARAMS_STANDARD=Standard
++value.OPENDRT_PRESET.OPENDRT_PARAMS_ARRIBA=Arriba
++value.OPENDRT_PRESET.OPENDRT_PARAMS_SYLVAN=Sylvan
++value.OPENDRT_PRESET.OPENDRT_PARAMS_COLORFUL=Colorful
++value.OPENDRT_PRESET.OPENDRT_PARAMS_AERY=Aery
++value.OPENDRT_PRESET.OPENDRT_PARAMS_DYSTOPIC=Dystopic
++value.OPENDRT_PRESET.OPENDRT_PARAMS_UMBRA=Umbra
+ option.AGX_EV=AgX Dynamic Range
+ suffix.AGX_EV=EV
+ option.AGX_HDR_EV=AgX HDR Dynamic Range
+diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/OpenDRT.glsl"
+--- "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl"	1970-01-01 01:00:00.000000000 +0100
++++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/OpenDRT.glsl"	2026-06-05 14:01:05.842002274 +0200
+@@ -0,0 +1,403 @@
++const float OPENDRT_PI = radians(180.0);
++
++struct OpenDRTParams {
++    // Tonescale parameters
++    float tn_Lp;   // Peak display luminance in nits. In SDR, the max value stays pinned at 1.0. In HDR, the max value is adjusted to match peak luminance in the HDR container.
++    float tn_gb;   // Amount of stops to boost Grey Luminance, per stop of exposure increase of Peak Luminance. For example, if HDR Grey Boost is 0.1, middle grey will be boosted by 0.1 stops per stop of Peak Luminance increase.
++    float pt_hdr;  // How much to affect purity compression and hue shift as Peak Luminance increases. A value of 0.0 will keep the purity compression and hue shift behavior the same for SDR and HDR. A value of 1.0 will preserve more purity as peak luminance increases (at the risk of gradient disruptions in high purity high intensity light sources), and will reduce hue shift amount in highlights.
++    float tn_Lg;   // Display luminance for middle grey (0.18) in nits. Sets the target value for middle grey within the available luminance range of the display device.
++    float tn_con;  // Adjusts contrast or slope. A constrained power function applied in display linear.
++    float tn_sh;   // Unitless control for the scene-linear value at which the tonescale system crosses the peak display linear value (1.0) and clips. This is not an exact constraint in order to keep the system simple, but corresponds to roughly 16 at Shoulder Clip = 0 and 1024 at Shoulder Clip = 1
++    float tn_toe;  // Quadratic toe compression. Strongly compresses deep shadows. Helpful to have some amount to smooth the transition into display minimum. Higher values with a strong positive Offset also valid. Similar to common camera DRT tonescale strategies.
++    float tn_off;  // Pre-tonescale scene-linear offset. If 0.0, scene-linear 0.0 maps to display-linear 0.0 through the tonescale system. Many camera imaging pipelines apply a negative offset to set the average of shadow grain at 0.0. A positive Offset can be desireable to compensate for this and increase detail in shadows, in addition to being aesthetically desireable. Offset should NOT be a negative number (Looking at you ACES 1.x)
++
++    // Contrast high
++    int tn_hcon_enable; // Contrast High allows control of the upper section of the tonescale function. Off by default, but can be useful if a stronger highlight contrast, or a softer highlight rolloff behavior is desired.
++    float tn_hcon;      // Amount adjust highlights. Positive values increase highlight exposure, negative values decrease. 0 has no effect.
++    float tn_hcon_pv;   // Amount of stops above middle grey (0.18) to start the adjustment.
++    float tn_hcon_st;   // How quickly above the Contrast High Pivot the effect begins.
++
++    // Contrast low
++    int tn_lcon_enable; // Contrast Low adds contrast to the midtones and shadows. Middle grey (0.18) is un-changed through the adjustment.
++    float tn_lcon;      // Amount of contrast to add. 0.0 has no effect. 1.0 will expose down by 1 stop at the origin (0,0)
++    float tn_lcon_w;    // The width of the adjustment. Width below 0.5 will mostly affect values between 0 and middle grey. Values above 0.5 will increasingly start to increase highlight contrast, which could be desired or not depending on what you are trying to do.
++
++    // Rendering space
++    float rs_sa; // Render space is the encoding in which the RGB Ratios are taken. Strength controls how much to desaturate from P3 gamut. Creatively, the more you desaturate, the more brilliance is increased in the resulting image. To be used with caution as this affects every other aspect of the image rendering.
++    float rs_rw; // The Red weight of the Render Space Strength. Modify with caution as this affects every other part of the image rendering.
++    float rs_bw; // The Blue weight of the Render Space Strength. Modify with caution as this affects every other part of the image rendering.
++
++    // Purity compression
++    int pt_enable;   // Compresses purity as intensity increases. Bare minimum functionality for a picture formation.
++    float pt_lml;    // Limit the strength of purity compression as intensity decreases, for all hue angles. A higher value will compress purity less in midtones and shadows.
++    float pt_lml_r;  // Limit the strength of purity compression as intensity decreases, for reds. A higher value will compress purity less in midtones and shadows.
++    float pt_lml_g;  // Limit the strength of purity compression as intensity decreases, for all greens. A higher value will compress purity less in midtones and shadows.
++    float pt_lml_b;  // Limit the strength of purity compression as intensity decreases, for blues. A higher value will compress purity less in midtones and shadows.
++    float pt_lmh;    // Limit the strength of purity compression as intensity increases. Can be helpful to keep some color in high intensity high purity light sources. Use with caution as this can cause gradient disruptions.
++    float pt_lmh_r;  // Limit the strength of red purity compression as intensity increases. Can be helpful to keep some color in high intensity fire and pure red light sources. Use with caution as this can cause gradient disruptions.
++    float pt_lmh_b;  // Limit the strength of blue purity compression as intensity increases. Can be helpful to keep some color in high intensity pure blue light sources. Use with caution as this can cause gradient disruptions.
++
++    // Purity softclip
++    int ptl_enable; // Purity Softclip increases tonality and smoothness in extremely pure input values that can not be adequately compressed into the display-referred gamut volume. The algorithm is tuned for common camera observer colorimetry sources.
++    float ptl_c;    // Purity Softclip strength for Cyan.
++    float ptl_m;    // Purity Softclip strength for Magenta.
++    float ptl_y;    // Purity Softclip strength for Yellow.
++
++    // Mid-range purity
++    int ptm_enable;     // The Mid Purity module adjusts mid-range purity of midtones and highlights. Without this module enabled, it is likely that midtones will not appear colorful enough, and highlights will appear too colorful resulting in chaulky pasty looking images especially in yellows and cyans.
++    float ptm_low;      // Amount to increase purity of midtones and shadows in mid-range purity areas. A value of 0.0 will have no effect. A value of 1.0 is the maximum possible value while preserving smoothness.
++    float ptm_low_rng;  // The strength of the Mid Purity Low adjustment. Higher values affect more of the luminance range.
++    float ptm_low_st;   // The strength of the Mid Purity Low adjustment. Higher values affect more of the purity range.
++    float ptm_high;     // Amount to decrease purity of upper midtones and highlights in mid-range purity areas. A value of 0.0 will have no effect. A value of 1.0 is the maximum possible value while preserving smoothness.
++    float ptm_high_rng; // The strength of the Mid Purity High adjustment. Higher values affect more of the luminance range.
++    float ptm_high_st;  // The strength of the Mid Purity High adjustment. Higher values affect more of the purity range.
++
++    // Brilliance
++    int brl_enable; // Brilliance scales the intensity of more pure stimuli. The brilliance module is applied before the tonescale is taken for purity compression. This means that if you darken reds with this adjustment, the purity compression will also be reduced. This behavior is natural and smooth.
++    float brl;      // Global intensity scale of high-purity stimuli.
++    float brl_r;    // Scale intensity of high-purity reds.
++    float brl_g;    // Scale intensity of high-purity greens.
++    float brl_b;    // Scale intensity of high-purity blues.
++    float brl_rng;  // As Brilliance Range is increased, the brilliance adjustments affect more the low intensity values of the image data.
++    float brl_st;   // As Brilliance Strength is increased, the brilliance adjustments affect more the low purity values of the image data.
++
++    // Post brilliance
++    int brlp_enable; // Post Brilliance scales the intensity of more pure stimuli after purity compression hue shifts have been applied. With the OpenDRT algorithm it is possible to get high intensity high purity values going out of the top of the display-referred gamut volume, which can cause discontinuities in gradients, especially on the RGB primaries. This module can help compensate for this.
++    float brlp;      // Global post purity compression brilliance adjustment
++    float brlp_r;    // Scale intensity of high-purity red, post purity compression. This can help reduce rings or halos around high purity light sources.
++    float brlp_g;    // Scale intensity of high-purity green, post purity compression. This can help reduce rings or halos around high purity light sources.
++    float brlp_b;    // Scale intensity of high-purity blue, post purity compression. This can help reduce rings or halos around high purity light sources.
++
++    // Hue contrast
++    int hc_enable;  // Hue Contrast compresses hue angle towards the primary at the bottom end and expands the hue angle towards the secondary as intensity increases. It also increases purity as it compresses, and decreases purity as it expands. This leads to a nice creatively controllable simulation of this effect from per-channel tonescales. For OpenDRT we only keep the red hue angle control since it is the most useful.
++    float hc_r;     // Amount to increase Hue Contrast at the red hue angle.
++    float hc_r_rng; // Hue contrast range control: determines where over the intensity range the hue contrast affects. Higher values place the crossover point higher in the intensity range.
++
++    // Hueshift RGB
++    int hs_rgb_enable; // Hue Shift RGB adds hue distortion to the red green and blue primary hue angles as intensity increases. By default OpenDRT will compress purity in a straight line in RGB/Chromaticity space. This can lead to perceived hue shifts due to the Abney Effect, for example a pure blue will perceptually shift towards purple as it desaturates. To compensate for this, and to use as a creative tool, this module allows creative control over the path that red green and blue hue angles take as their purity is compressed.
++    float hs_r;        // Amount to distort the red hue angle towards yellow as intensity increases.
++    float hs_r_rng;    // Range of the red hueshift: higher values affect more of the lower intensity range.
++    float hs_g;        // Amount to distort the green hue angle towards yellow as intensity increases.
++    float hs_g_rng;    // Range of the green hueshift: higher values affect more of the lower intensity range.
++    float hs_b;        // Amount to distort the blue hue angle towards cyan as intensity increases.
++    float hs_b_rng;    // Range of the blue hueshift: higher values affect more of the lower intensity range.
++
++    // Hueshift CMY
++    int hs_cmy_enable; // Hue Shift CMY adds hue distortion to the cyan magenta and yellow secondary hue angles as intensity decreases. This module allows some very minimal adjustments of secondary hue angles as a creative tool.
++    float hs_c;        // Amount to distort the cyan hue angle towards blue as intensity decreases.
++    float hs_c_rng;    // Range of the cyan hueshift: higher values affect more of the upper intensity range.
++    float hs_m;        // Amount to distort the magenta hue angle towards blue as intensity decreases.
++    float hs_m_rng;    // Range of the magenta hueshift: higher values affect more of the upper intensity range.
++    float hs_y;        // Amount to distort the yellow hue angle towards red as intensity decreases.
++    float hs_y_rng;    // Range of the yellow hueshift: higher values affect more of the upper intensity range.
++
++    // Surround
++    int tn_su; // OpenDRT includes a simple surround compensation model. DCI cinema presets use dark surround. Rec.1886 uses dim surround. And sRGB Display uses bright surround. This functionality should provide a better perceptual match between viewing environments.
++};
++
++// Look presets
++
++// Standard: A minimal smooth starting look with natural color rendition and minimal adjustments to create an aesthetically pleasing image. Uses the Medium Contrast tonescale preset.
++const OpenDRTParams OPENDRT_PARAMS_STANDARD = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.66, 0.5, 0.003, 0.005,
++    0, 0.0, 1.0, 4.0, 0, 0.0, 0.5, 0.35, 0.25, 0.55,
++    1, 0.25, 0.5, 0.0, 0.1, 0.25, 0.5, 0.0, 1, 0.06, 0.08, 0.06,
++    1, 0.4, 0.25, 0.5, -0.8, 0.35, 0.4, 1, 0.0, -2.5, -1.5, -1.5, 0.5, 0.35,
++    1, -0.5, -1.25, -1.25, -0.25, 1, 1.0, 0.3, 1, 0.6, 0.6, 0.35, 1.0, 0.66, 1.0,
++    1, 0.25, 1.0, 0.0, 1.0, 0.0, 1.0, 1
++);
++
++// Arriba: A minimal smooth look with slightly stronger saturation and a soft rolloff in shadows similar to typical camera manufacturer picture formation approaches.
++const OpenDRTParams OPENDRT_PARAMS_ARRIBA = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.05, 0.5, 0.1, 0.01,
++    0, 0.0, 1.0, 4.0, 1, 1.5, 0.2, 0.35, 0.25, 0.55,
++    1, 0.25, 0.45, 0.0, 0.1, 0.25, 0.25, 0.0, 1, 0.06, 0.08, 0.06,
++    1, 1.0, 0.4, 0.5, -0.8, 0.66, 0.6, 1, 0.0, -2.5, -1.5, -1.5, 0.5, 0.35,
++    1, 0.0, -1.7, -2.0, -0.5, 1, 1.0, 0.3, 1, 0.6, 0.8, 0.35, 1.0, 0.66, 1.0,
++    1, 0.15, 1.0, 0.0, 1.0, 0.0, 1.0, 1
++);
++
++// Sylvan: A smooth starting look with slightly stronger contrast and stronger hue distortions which may be preferential for skin.
++const OpenDRTParams OPENDRT_PARAMS_SYLVAN = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.6, 0.5, 0.01, 0.01,
++    0, 0.0, 1.0, 4.0, 1, 0.25, 0.75, 0.25, 0.25, 0.55,
++    1, 0.15, 0.5, 0.15, 0.1, 0.25, 0.15, 0.15, 1, 0.05, 0.08, 0.05,
++    1, 0.5, 0.5, 0.5, -0.8, 0.5, 0.5, 1, -1.0, -2.0, -2.0, 0.0, 0.25, 0.25,
++    1, -1.0, -0.5, -0.25, -0.25, 1, 1.0, 0.4, 1, 0.6, 1.15, 0.8, 1.25, 0.6, 1.0,
++    1, 0.25, 0.25, 0.25, 0.5, 0.35, 0.5, 1
++);
++
++// Colorful: A low contrast saturated bright look. Might be a good fit for animation.
++const OpenDRTParams OPENDRT_PARAMS_COLORFUL = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.5, 0.5, 0.003, 0.003,
++    0, 0.0, 1.0, 4.0, 1, 0.4, 0.5, 0.35, 0.25, 0.55,
++    1, 0.5, 1.0, 0.0, 0.5, 0.15, 0.15, 0.15, 1, 0.05, 0.06, 0.05,
++    1, 0.8, 0.5, 0.4, -0.8, 0.4, 0.4, 1, 0.0, -1.25, -1.25, -0.25, 0.3, 0.5,
++    1, -0.5, -1.25, -1.25, -0.5, 1, 1.0, 0.4, 1, 0.5, 0.8, 0.35, 1.0, 0.5, 1.0,
++    1, 0.25, 1.0, 0.0, 1.0, 0.25, 1.0, 1
++);
++
++// Aery: A low contrast look with cool highlights and more pure color rendered quite bright. It features strong desaturation near the grey axis, and darkening of only the most pure colors.
++const OpenDRTParams OPENDRT_PARAMS_AERY = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.15, 0.5, 0.04, 0.006,
++    0, 0.0, 0.0, 0.5, 1, 0.5, 2.0, 0.25, 0.2, 0.5,
++    1, 0.0, 0.5, 0.15, 0.1, 0.0, 0.1, 0.0, 1, 0.05, 0.08, 0.05,
++    1, 0.8, 0.35, 0.5, -0.9, 0.5, 0.3, 1, -3.0, 0.0, 0.0, 1.0, 0.8, 0.15,
++    1, -1.0, -1.0, -1.0, 0.0, 1, 0.5, 0.25, 1, 0.6, 1.0, 0.35, 2.0, 0.5, 1.5,
++    1, 0.35, 1.0, 0.25, 1.0, 0.35, 0.5, 1
++);
++
++// Dystopic: A high contrast look with very low mid-purity-range saturation and strong filmish hue distortions.
++const OpenDRTParams OPENDRT_PARAMS_DYSTOPIC = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.6, 0.5, 0.01, 0.008,
++    1, 0.25, 0.0, 1.0, 1, 1.0, 0.75, 0.2, 0.25, 0.55,
++    1, 0.15, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1, 0.05, 0.08, 0.05,
++    1, 0.25, 0.25, 0.8, -0.8, 0.6, 0.25, 1, -2.0, -2.0, -2.0, 0.0, 0.35, 0.35,
++    1, 0.0, -1.0, -1.0, -1.0, 1, 1.0, 0.25, 1, 0.7, 1.33, 1.0, 2.0, 0.75, 2.0,
++    1, 1.0, 0.5, 1.0, 1.0, 1.0, 0.765, 1
++);
++
++// Umbra: A dark moody cinematic look. Features low shadow contrast, warm whites, strong filmic hue distortions, cyan blues, and more saturated colors that render very dark. Works well with a Display Peak Luminance of 200 nits or above.
++const OpenDRTParams OPENDRT_PARAMS_UMBRA = OpenDRTParams(
++    100.0, 0.13, 0.5, 10.0, 1.8, 0.5, 0.001, 0.015,
++    0, 0.0, 1.0, 4.0, 1, 1.0, 1.0, 0.35, 0.25, 0.55,
++    1, 0.0, 0.5, 0.0, 0.15, 0.25, 0.25, 0.0, 1, 0.05, 0.06, 0.05,
++    1, 0.4, 0.35, 0.66, -0.6, 0.45, 0.45, 1, -2.0, -4.5, -3.0, -4.0, 0.35, 0.3,
++    1, 0.0, -2.0, -1.0, -0.5, 1, 1.0, 0.35, 1, 0.66, 1.0, 0.5, 2.0, 0.85, 2.0,
++    1, 0.0, 1.0, 0.25, 1.0, 0.66, 0.66, 1
++);
++
++// Core math helpers
++float compress_toe_quadratic(float x, float toe, int inv) {
++    if (toe == 0.0) return x;
++    if (inv == 0) return (x * x) / (x + toe);
++    return (x + sqrt(max(0.0, x * (4.0 * toe + x)))) * 0.5;
++}
++
++float cbrt_safe(float x) {
++    return x < 0.0 ? -pow(-x, 1.0 / 3.0) : pow(x, 1.0 / 3.0);
++}
++
++float compress_toe_cubic(float x, float m, float w, int inv) {
++    if (m == 1.0) return x;
++    float x2 = x * x;
++    if (inv == 0) {
++        return x * (x2 + m * w) / (x2 + w);
++    } else {
++        float p0 = x2 - 3.0 * m * w;
++        float p1 = 2.0 * x2 + 27.0 * w - 9.0 * m * w;
++        float inner = x2 * p1 * p1 - 4.0 * p0 * p0 * p0;
++        float p2 = cbrt_safe(max(0.0, sqrt(max(0.0, inner)) * 0.5 + x * p1 * 0.5));
++        return p0 / (3.0 * max(p2, 1e-5)) + p2 / 3.0 + x / 3.0;
++    }
++}
++
++float compress_hyperbolic_power(float x, float s, float p) {
++    return pow(x / (x + s), p);
++}
++
++float contrast_high(float x, float p, float pv, float pv_lx, int inv) {
++    float x0 = 0.18 * pow(2.0, pv);
++    if (x < x0 || p == 1.0) return x;
++    float o = x0 - x0 / p;
++    float s0 = pow(x0, 1.0 - p) / p;
++    float x1 = x0 * pow(2.0, pv_lx);
++    float k1 = p * s0 * pow(x1, p) / x1;
++    float y1 = s0 * pow(x1, p) + o;
++    if (inv == 1) {
++        return x > y1 ? (x - y1) / k1 + x1 : pow(max(0.0, (x - o) / s0), 1.0 / p);
++    } else {
++        return x > x1 ? k1 * (x - x1) + y1 : s0 * pow(x, p) + o;
++    }
++}
++
++float softplus(float x, float s) {
++    if (x > 10.0 * s || s < 1e-4) return x;
++    return s * log(max(0.0, 1.0 + exp(x / s)));
++}
++
++vec2 opponent(vec3 rgb) {
++    return vec2(rgb.r - rgb.b, rgb.g - (rgb.r + rgb.b) * 0.5);
++}
++
++float hue_offset(float h, float o) {
++    return mod(h - o + OPENDRT_PI, 2.0 * OPENDRT_PI) - OPENDRT_PI;
++}
++
++float gauss_window(float x, float w) {
++    return exp(-x * x / w);
++}
++
++vec3 opendrt(vec3 rgb, OpenDRTParams params) {
++    // Tonescale constraint calculations
++    float ts_x1 = pow(2.0, 6.0 * params.tn_sh + 4.0);
++    float ts_y1 = params.tn_Lp / 100.0;
++    float ts_x0 = 0.18 + params.tn_off;
++    float ts_y0 = (params.tn_Lg / 100.0) * (1.0 + params.tn_gb * log2(ts_y1));
++    float ts_s0 = compress_toe_quadratic(ts_y0, params.tn_toe, 1);
++    float ts_p = params.tn_con / (1.0 + float(params.tn_su) * 0.05);
++    float ts_s10 = ts_x0 * (pow(ts_s0, -1.0 / params.tn_con) - 1.0);
++    float ts_m1 = ts_y1 / pow(ts_x1 / (ts_x1 + ts_s10), params.tn_con);
++    float ts_m2 = compress_toe_quadratic(ts_m1, params.tn_toe, 1);
++    float ts_s = ts_x0 * (pow(ts_s0 / ts_m2, -1.0 / params.tn_con) - 1.0);
++
++    // Linear output scaling (equivalent to standard display mapping)
++    float ts_dsc = 100.0 / params.tn_Lp;
++
++    float pt_cmp_Lf = params.pt_hdr * min(1.0, (params.tn_Lp - 100.0) / 900.0);
++    float s_Lp100 = ts_x0 * (pow((params.tn_Lg / 100.0), -1.0 / params.tn_con) - 1.0);
++    float ts_s1 = ts_s * pt_cmp_Lf + s_Lp100 * (1.0 - pt_cmp_Lf);
++
++    // Rendering space
++    vec3 rs_w = vec3(params.rs_rw, 1.0 - params.rs_rw - params.rs_bw, params.rs_bw);
++    float sat_L = dot(rgb, rs_w);
++    rgb = sat_L * params.rs_sa + rgb * (1.0 - params.rs_sa);
++
++    // Offset
++    rgb += params.tn_off;
++
++    // Tonescale norm & ratios
++    float tsn = length(rgb) / 1.73205080757;
++    rgb /= tsn;
++
++    // Opponent & achromatic distance
++    vec2 opp = opponent(rgb);
++    float ach_d = length(opp) * 0.5;
++    ach_d = 1.25 * compress_toe_quadratic(ach_d, 0.25, 0);
++
++    // Hue angle
++    float hue = mod(atan(opp.x, opp.y) + 3.14159265359 + 1.10714931, 2.0 * 3.14159265359);
++
++    // Hue windows
++    vec3 ha_rgb = vec3(
++        gauss_window(hue_offset(hue, 0.1), 0.66),
++                       gauss_window(hue_offset(hue, 4.3), 0.66),
++                       gauss_window(hue_offset(hue, 2.3), 0.66)
++    );
++    vec3 ha_rgb_hs = vec3(
++        gauss_window(hue_offset(hue, -0.4), 0.66),
++                          ha_rgb.y,
++                          gauss_window(hue_offset(hue, 2.5), 0.66)
++    );
++    vec3 ha_cmy = vec3(
++        gauss_window(hue_offset(hue, 3.3), 0.5),
++                       gauss_window(hue_offset(hue, 1.3), 0.5),
++                       gauss_window(hue_offset(hue, -1.15), 0.5)
++    );
++
++    // Brilliance
++    if (params.brl_enable == 1) {
++        float brl_tsf = pow(tsn / (tsn + 1.0), 1.0 - params.brl_rng);
++        float brl_exf = (params.brl + params.brl_r * ha_rgb.x + params.brl_g * ha_rgb.y + params.brl_b * ha_rgb.z) * pow(ach_d, 1.0 / params.brl_st);
++        float brl_ex = pow(2.0, brl_exf * (brl_exf < 0.0 ? brl_tsf : 1.0 - brl_tsf));
++        tsn *= brl_ex;
++    }
++
++    // Contrast low
++    if (params.tn_lcon_enable == 1) {
++        float lcon_m = pow(2.0, -params.tn_lcon);
++        float lcon_w = params.tn_lcon_w / 4.0;
++        lcon_w *= lcon_w;
++        float lcon_cnst_sc = compress_toe_cubic(ts_x0, lcon_m, lcon_w, 1) / ts_x0;
++        tsn *= lcon_cnst_sc;
++        tsn = compress_toe_cubic(tsn, lcon_m, lcon_w, 0);
++    }
++
++    // Contrast high
++    if (params.tn_hcon_enable == 1) {
++        float hcon_p = pow(2.0, params.tn_hcon);
++        tsn = contrast_high(tsn, hcon_p, params.tn_hcon_pv, params.tn_hcon_st, 0);
++    }
++
++    // Hyperbolic compression
++    float tsn_pt = compress_hyperbolic_power(tsn, ts_s1, ts_p);
++    float tsn_const = compress_hyperbolic_power(tsn, s_Lp100, ts_p);
++    tsn = compress_hyperbolic_power(tsn, ts_s, ts_p);
++
++    // Hue contrast R
++    if (params.hc_enable == 1) {
++        float hc_ts = 1.0 - tsn_const;
++        float hc_c = hc_ts * (1.0 - ach_d) + ach_d * (1.0 - hc_ts);
++        hc_c *= ach_d * ha_rgb.x;
++        hc_ts = pow(hc_ts, 1.0 / params.hc_r_rng);
++        float hc_f = params.hc_r * (hc_c - 2.0 * hc_c * hc_ts) + 1.0;
++        rgb.g *= hc_f;
++        rgb.b *= hc_f;
++    }
++
++    // Hue shift RGB
++    if (params.hs_rgb_enable == 1) {
++        vec3 hs_rgb = vec3(
++            ha_rgb_hs.x * ach_d * pow(tsn_pt, 1.0 / params.hs_r_rng),
++                           ha_rgb_hs.y * ach_d * pow(tsn_pt, 1.0 / params.hs_g_rng),
++                           ha_rgb_hs.z * ach_d * pow(tsn_pt, 1.0 / params.hs_b_rng)
++        );
++        vec3 hsf = vec3(hs_rgb.x * params.hs_r, hs_rgb.y * -params.hs_g, hs_rgb.z * -params.hs_b);
++        hsf = vec3(hsf.z - hsf.y, hsf.x - hsf.z, hsf.y - hsf.x);
++        rgb += hsf;
++    }
++
++    // Hue shift CMY
++    if (params.hs_cmy_enable == 1) {
++        float tsn_pt_compl = 1.0 - tsn_pt;
++        vec3 hs_cmy = vec3(
++            ha_cmy.x * ach_d * pow(tsn_pt_compl, 1.0 / params.hs_c_rng),
++                           ha_cmy.y * ach_d * pow(tsn_pt_compl, 1.0 / params.hs_m_rng),
++                           ha_cmy.z * ach_d * pow(tsn_pt_compl, 1.0 / params.hs_y_rng)
++        );
++        vec3 hsf = vec3(hs_cmy.x * -params.hs_c, hs_cmy.y * params.hs_m, hs_cmy.z * params.hs_y);
++        hsf = vec3(hsf.z - hsf.y, hsf.x - hsf.z, hsf.y - hsf.x);
++        rgb += hsf;
++    }
++
++    // Purity compression
++    float pt_lml_p = 1.0 + 4.0 * (1.0 - tsn_pt) * (params.pt_lml + params.pt_lml_r * ha_rgb_hs.x + params.pt_lml_g * ha_rgb_hs.y + params.pt_lml_b * ha_rgb_hs.z);
++    float ptf = 1.0 - pow(tsn_pt, pt_lml_p);
++    float pt_lmh_p = (1.0 - ach_d * (params.pt_lmh_r * ha_rgb_hs.x + params.pt_lmh_b * ha_rgb_hs.z)) * (1.0 - params.pt_lmh * ach_d);
++    ptf = pow(ptf, pt_lmh_p);
++
++    // Mid-range purity
++    if (params.ptm_enable == 1) {
++        float ptm_low_f = (params.ptm_low_st == 0.0 || params.ptm_low_rng == 0.0) ? 1.0 :
++        1.0 + params.ptm_low * exp(-2.0 * ach_d * ach_d / params.ptm_low_st) * pow(1.0 - tsn_const, 1.0 / params.ptm_low_rng);
++        float ptm_high_f = (params.ptm_high_st == 0.0 || params.ptm_high_rng == 0.0) ? 1.0 :
++        1.0 + params.ptm_high * exp(-2.0 * ach_d * ach_d / params.ptm_high_st) * pow(tsn_pt, 1.0 / (4.0 * params.ptm_high_rng));
++        ptf *= ptm_low_f * ptm_high_f;
++    }
++
++    // Lerp to peak achromatic
++    rgb = rgb * ptf + (1.0 - ptf);
++
++    // Inverse rendering space
++    sat_L = dot(rgb, rs_w);
++    rgb = (sat_L * params.rs_sa - rgb) / (params.rs_sa - 1.0);
++
++    // Post brilliance
++    if (params.brlp_enable == 1) {
++        vec2 brlp_opp = opponent(rgb);
++        float brlp_ach_d = length(brlp_opp) * 0.25;
++        brlp_ach_d = 1.1 * (brlp_ach_d * brlp_ach_d / (brlp_ach_d + 0.1));
++        vec3 brlp_ha_rgb = ach_d * ha_rgb;
++        float brlp_m = params.brlp + params.brlp_r * brlp_ha_rgb.x + params.brlp_g * brlp_ha_rgb.y + params.brlp_b * brlp_ha_rgb.z;
++        float brlp_ex = pow(2.0, brlp_m * brlp_ach_d * tsn);
++        rgb *= brlp_ex;
++    }
++
++    // Purity compress
++    if (params.ptl_enable == 1) {
++        rgb = vec3(softplus(rgb.r, params.ptl_c), softplus(rgb.g, params.ptl_m), softplus(rgb.b, params.ptl_y));
++    }
++
++    // Final tonescale adjustments
++    tsn *= ts_m2;
++    tsn = compress_toe_quadratic(tsn, params.tn_toe, 0);
++    tsn *= ts_dsc;
++
++    // Recombine
++    rgb *= tsn;
++
++    // Clamp to valid linear range
++    rgb = clamp(rgb, 0.0, 1.0);
++
++    return rgb;
++}
+diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"
+--- "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl"	2026-05-06 21:58:52.000000000 +0200
++++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-06-05 14:29:05.659289637 +0200
+@@ -2,6 +2,7 @@
+ 
+ #include "/Lib/UniformDeclare.glsl"
+ #include "/Lib/Utilities.glsl"
++#include "/Lib/OpenDRT.glsl"
+ 
+ //#undef HDR_ENABLED
+ 
+@@ -32,6 +33,107 @@
+ 	return a / b;
+ }
+ 
++vec3 OpenDRT(vec3 color) {
++    OpenDRTParams opendrt_params = OPENDRT_PRESET;
++
++    // For granular control, uncomment and edit the lines below.
++    // opendrt_params.tn_Lp = 100.0;   // Peak display luminance in nits. In SDR, the max value stays pinned at 1.0. In HDR, the max value is adjusted to match peak luminance in the HDR container.
++    // opendrt_params.tn_gb = 0.13;   // Amount of stops to boost Grey Luminance, per stop of exposure increase of Peak Luminance. For example, if HDR Grey Boost is 0.1, middle grey will be boosted by 0.1 stops per stop of Peak Luminance increase.
++    // opendrt_params.pt_hdr = 0.5;  // How much to affect purity compression and hue shift as Peak Luminance increases. A value of 0.0 will keep the purity compression and hue shift behavior the same for SDR and HDR. A value of 1.0 will preserve more purity as peak luminance increases (at the risk of gradient disruptions in high purity high intensity light sources), and will reduce hue shift amount in highlights.
++    opendrt_params.tn_Lg = 18.0;   // Display luminance for middle grey (0.18) in nits. Sets the target value for middle grey within the available luminance range of the display device.
++    // opendrt_params.tn_con = 1.5;  // Adjusts contrast or slope. A constrained power function applied in display linear.
++    // opendrt_params.tn_sh = 0.5;   // Unitless control for the scene-linear value at which the tonescale system crosses the peak display linear value (1.0) and clips. This is not an exact constraint in order to keep the system simple, but corresponds to roughly 16 at Shoulder Clip = 0 and 1024 at Shoulder Clip = 1
++    // opendrt_params.tn_toe = 0.003;  // Quadratic toe compression. Strongly compresses deep shadows. Helpful to have some amount to smooth the transition into display minimum. Higher values with a strong positive Offset also valid. Similar to common camera DRT tonescale strategies.
++    // opendrt_params.tn_off = 0.003;  // Pre-tonescale scene-linear offset. If 0.0, scene-linear 0.0 maps to display-linear 0.0 through the tonescale system. Many camera imaging pipelines apply a negative offset to set the average of shadow grain at 0.0. A positive Offset can be desireable to compensate for this and increase detail in shadows, in addition to being aesthetically desireable. Offset should NOT be a negative number (Looking at you ACES 1.x)
++
++    // Contrast high
++    // opendrt_params.tn_hcon_enable = 0; // Contrast High allows control of the upper section of the tonescale function. Off by default, but can be useful if a stronger highlight contrast, or a softer highlight rolloff behavior is desired.
++    // opendrt_params.tn_hcon = 0.0;      // Amount adjust highlights. Positive values increase highlight exposure, negative values decrease. 0 has no effect.
++    // opendrt_params.tn_hcon_pv = 1.0;   // Amount of stops above middle grey (0.18) to start the adjustment.
++    // opendrt_params.tn_hcon_st = 4.0;   // How quickly above the Contrast High Pivot the effect begins.
++
++    // Contrast low
++    // opendrt_params.tn_lcon_enable = 1; // Contrast Low adds contrast to the midtones and shadows. Middle grey (0.18) is un-changed through the adjustment.
++    // opendrt_params.tn_lcon = 0.4;      // Amount of contrast to add. 0.0 has no effect. 1.0 will expose down by 1 stop at the origin (0,0)
++    // opendrt_params.tn_lcon_w = 0.5;    // The width of the adjustment. Width below 0.5 will mostly affect values between 0 and middle grey. Values above 0.5 will increasingly start to increase highlight contrast, which could be desired or not depending on what you are trying to do.
++
++    // Rendering space
++    // opendrt_params.rs_sa = 0.35; // Render space is the encoding in which the RGB Ratios are taken. Strength controls how much to desaturate from P3 gamut. Creatively, the more you desaturate, the more brilliance is increased in the resulting image. To be used with caution as this affects every other aspect of the image rendering.
++    // opendrt_params.rs_rw = 0.25; // The Red weight of the Render Space Strength. Modify with caution as this affects every other part of the image rendering.
++    // opendrt_params.rs_bw = 0.55; // The Blue weight of the Render Space Strength. Modify with caution as this affects every other part of the image rendering.
++
++    // Purity compression
++    // opendrt_params.pt_enable = 1;   // Compresses purity as intensity increases. Bare minimum functionality for a picture formation.
++    // opendrt_params.pt_lml = 0.5;    // Limit the strength of purity compression as intensity decreases, for all hue angles. A higher value will compress purity less in midtones and shadows.
++    // opendrt_params.pt_lml_r = 1.0;  // Limit the strength of purity compression as intensity decreases, for reds. A higher value will compress purity less in midtones and shadows.
++    // opendrt_params.pt_lml_g = 0.0;  // Limit the strength of purity compression as intensity decreases, for all greens. A higher value will compress purity less in midtones and shadows.
++    // opendrt_params.pt_lml_b = 0.5;  // Limit the strength of purity compression as intensity decreases, for blues. A higher value will compress purity less in midtones and shadows.
++    // opendrt_params.pt_lmh = 0.15;    // Limit the strength of purity compression as intensity increases. Can be helpful to keep some color in high intensity high purity light sources. Use with caution as this can cause gradient disruptions.
++    // opendrt_params.pt_lmh_r = 0.15;  // Limit the strength of red purity compression as intensity increases. Can be helpful to keep some color in high intensity fire and pure red light sources. Use with caution as this can cause gradient disruptions.
++    // opendrt_params.pt_lmh_b = 0.15;  // Limit the strength of blue purity compression as intensity increases. Can be helpful to keep some color in high intensity pure blue light sources. Use with caution as this can cause gradient disruptions.
++
++    // Purity softclip
++    // opendrt_params.ptl_enable = 1; // Purity Softclip increases tonality and smoothness in extremely pure input values that can not be adequately compressed into the display-referred gamut volume. The algorithm is tuned for common camera observer colorimetry sources.
++    // opendrt_params.ptl_c = 0.05;    // Purity Softclip strength for Cyan.
++    // opendrt_params.ptl_m = 0.06;    // Purity Softclip strength for Magenta.
++    // opendrt_params.ptl_y = 0.05;    // Purity Softclip strength for Yellow.
++
++    // Mid-range purity
++    // opendrt_params.ptm_enable = 1;     // The Mid Purity module adjusts mid-range purity of midtones and highlights. Without this module enabled, it is likely that midtones will not appear colorful enough, and highlights will appear too colorful resulting in chaulky pasty looking images especially in yellows and cyans.
++    // opendrt_params.ptm_low = 0.8;      // Amount to increase purity of midtones and shadows in mid-range purity areas. A value of 0.0 will have no effect. A value of 1.0 is the maximum possible value while preserving smoothness.
++    // opendrt_params.ptm_low_rng = 0.5;  // The strength of the Mid Purity Low adjustment. Higher values affect more of the luminance range.
++    // opendrt_params.ptm_low_st = 0.4;   // The strength of the Mid Purity Low adjustment. Higher values affect more of the purity range.
++    // opendrt_params.ptm_high = -0.8;     // Amount to decrease purity of upper midtones and highlights in mid-range purity areas. A value of 0.0 will have no effect. A value of 1.0 is the maximum possible value while preserving smoothness.
++    // opendrt_params.ptm_high_rng = 0.4; // The strength of the Mid Purity High adjustment. Higher values affect more of the luminance range.
++    // opendrt_params.ptm_high_st = 0.4;  // The strength of the Mid Purity High adjustment. Higher values affect more of the purity range.
++
++    // Brilliance
++    // opendrt_params.brl_enable = 1; // Brilliance scales the intensity of more pure stimuli. The brilliance module is applied before the tonescale is taken for purity compression. This means that if you darken reds with this adjustment, the purity compression will also be reduced. This behavior is natural and smooth.
++    // opendrt_params.brl = 0.0;      // Global intensity scale of high-purity stimuli.
++    // opendrt_params.brl_r = -1.25;    // Scale intensity of high-purity reds.
++    // opendrt_params.brl_g = -1.25;    // Scale intensity of high-purity greens.
++    // opendrt_params.brl_b = -1.25;    // Scale intensity of high-purity blues.
++    // opendrt_params.brl_rng = 0.3;  // As Brilliance Range is increased, the brilliance adjustments affect more the low intensity values of the image data.
++    // opendrt_params.brl_st = 0.5;   // As Brilliance Strength is increased, the brilliance adjustments affect more the low purity values of the image data.
++
++    // Post brilliance
++    // opendrt_params.brlp_enable = 1; // Post Brilliance scales the intensity of more pure stimuli after purity compression hue shifts have been applied. With the OpenDRT algorithm it is possible to get high intensity high purity values going out of the top of the display-referred gamut volume, which can cause discontinuities in gradients, especially on the RGB primaries. This module can help compensate for this.
++    // opendrt_params.brlp = -0.5;      // Global post purity compression brilliance adjustment
++    // opendrt_params.brlp_r = -1.25;    // Scale intensity of high-purity red, post purity compression. This can help reduce rings or halos around high purity light sources.
++    // opendrt_params.brlp_g = -1.25;    // Scale intensity of high-purity green, post purity compression. This can help reduce rings or halos around high purity light sources.
++    // opendrt_params.brlp_b = -0.5;    // Scale intensity of high-purity blue, post purity compression. This can help reduce rings or halos around high purity light sources.
++
++    // Hue contrast
++    // opendrt_params.hc_enable = 1;  // Hue Contrast compresses hue angle towards the primary at the bottom end and expands the hue angle towards the secondary as intensity increases. It also increases purity as it compresses, and decreases purity as it expands. This leads to a nice creatively controllable simulation of this effect from per-channel tonescales. For OpenDRT we only keep the red hue angle control since it is the most useful.
++    // opendrt_params.hc_r = 1.0;     // Amount to increase Hue Contrast at the red hue angle.
++    // opendrt_params.hc_r_rng = 0.4; // Hue contrast range control: determines where over the intensity range the hue contrast affects. Higher values place the crossover point higher in the intensity range.
++
++    // Hueshift RGB
++    // opendrt_params.hs_rgb_enable = 1; // Hue Shift RGB adds hue distortion to the red green and blue primary hue angles as intensity increases. By default OpenDRT will compress purity in a straight line in RGB/Chromaticity space. This can lead to perceived hue shifts due to the Abney Effect, for example a pure blue will perceptually shift towards purple as it desaturates. To compensate for this, and to use as a creative tool, this module allows creative control over the path that red green and blue hue angles take as their purity is compressed.
++    // opendrt_params.hs_r = 0.5;        // Amount to distort the red hue angle towards yellow as intensity increases.
++    // opendrt_params.hs_r_rng = 0.8;    // Range of the red hueshift: higher values affect more of the lower intensity range.
++    // opendrt_params.hs_g = 0.35;        // Amount to distort the green hue angle towards yellow as intensity increases.
++    // opendrt_params.hs_g_rng = 1.0;    // Range of the green hueshift: higher values affect more of the lower intensity range.
++    // opendrt_params.hs_b = 0.5;        // Amount to distort the blue hue angle towards cyan as intensity increases.
++    // opendrt_params.hs_b_rng = 1.0;    // Range of the blue hueshift: higher values affect more of the lower intensity range.
++
++    // Hueshift CMY
++    // opendrt_params.hs_cmy_enable = 1; // Hue Shift CMY adds hue distortion to the cyan magenta and yellow secondary hue angles as intensity decreases. This module allows some very minimal adjustments of secondary hue angles as a creative tool.
++    // opendrt_params.hs_c = 0.25;        // Amount to distort the cyan hue angle towards blue as intensity decreases.
++    // opendrt_params.hs_c_rng = 1.0;    // Range of the cyan hueshift: higher values affect more of the upper intensity range.
++    // opendrt_params.hs_m = 0.0;        // Amount to distort the magenta hue angle towards blue as intensity decreases.
++    // opendrt_params.hs_m_rng = 1.0;    // Range of the magenta hueshift: higher values affect more of the upper intensity range.
++    // opendrt_params.hs_y = 0.25;        // Amount to distort the yellow hue angle towards red as intensity decreases.
++    // opendrt_params.hs_y_rng = 1.0;    // Range of the yellow hueshift: higher values affect more of the upper intensity range.
++
++    // Surround
++    // opendrt_params.tn_su = 1; // OpenDRT includes a simple surround compensation model. DCI cinema presets use dark surround. Rec.1886 uses dim surround. And sRGB Display uses bright surround. This functionality should provide a better perceptual match between viewing environments.
++
++    color = opendrt(color, opendrt_params);
++
++    return LinearToSrgb(color);
++}
++
+ vec3 ACES(vec3 color){
+ 	color *= 1.4;
+ 
+diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Settings.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/Settings.glsl"
+--- "iterationRP Alpha 0.8.22/shaders/Lib/Settings.glsl"	2026-05-06 20:48:50.000000000 +0200
++++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Settings.glsl"	2026-06-05 14:06:47.139410495 +0200
+@@ -697,7 +697,8 @@
+   //#define GLARE_FLARE_SHADOWBASED
+ 
+ //Color---------------------------------
+-	#define TONEMAP_OPERATOR 	AgX // [AgX ACES GT None]
++	#define TONEMAP_OPERATOR 	OpenDRT // [OpenDRT AgX ACES GT None]
++	#define OPENDRT_PRESET      OPENDRT_PARAMS_COLORFUL // [OPENDRT_PARAMS_STANDARD OPENDRT_PARAMS_ARRIBA OPENDRT_PARAMS_SYLVAN OPENDRT_PARAMS_COLORFUL OPENDRT_PARAMS_AERY OPENDRT_PARAMS_DYSTOPIC OPENDRT_PARAMS_UMBRA]
+ 	#define AGX_EV 				14.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
+ 	#define AGX_HDR_EV			12.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
+ 	#define AGX_HDR_MIDGREY		0.16 // [0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3]
+diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/shaders.properties" "iterationRP Alpha 0.8.22 patched/shaders/shaders.properties"
+--- "iterationRP Alpha 0.8.22/shaders/shaders.properties"	2026-05-05 19:54:42.000000000 +0200
++++ "iterationRP Alpha 0.8.22 patched/shaders/shaders.properties"	2026-06-05 14:08:50.780462672 +0200
+@@ -1125,6 +1125,7 @@
+ 
+ 
+ 	screen.COLOR =  TONEMAP_OPERATOR <empty>  \
++                   	OPENDRT_PRESET <empty> \
+ 					AGX_EV AGX_HDR_EV \
+ 					ABNEY_EFFECT_CORRECTION AGX_HDR_MIDGREY \
+ 					<empty> <empty> \
