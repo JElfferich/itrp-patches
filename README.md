@@ -2,7 +2,7 @@
 
 ## Features
 
-- OpenDRT display rendering transform (tonemapping) by [Jed Smith](https://github.com/jedypod/open-display-transform) for richer color rendering.
+- OpenDRT display rendering transform (tonemapping) by [Jed Smith](https://github.com/jedypod/open-display-transform) for rich and polished color rendering.
 - More in the future.
 
 ## How to apply
