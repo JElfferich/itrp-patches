@@ -8,7 +8,7 @@
 ## How to apply
 
 ```bash
-patch -p1 -d <path_to_folder> < opendrt.patch
+patch -p1 -d <path_to_folder> < itrp.patch
 ```
 
 ## License
