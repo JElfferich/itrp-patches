@@ -8,10 +8,10 @@
 ## How to apply
 
 ```bash
-// For Linux and MacOS
+# For Linux and MacOS
 patch -p1 -d <path_to_folder> < itrp.patch
 
-// On Windows with Git Bash
+# On Windows with Git Bash
 git apply -p1 --directory=<path_to_folder> itrp.patch
 ```
 
