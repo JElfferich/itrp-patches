@@ -425,7 +425,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +}
 diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"
 --- "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl"	2026-05-06 21:58:52.000000000 +0200
-+++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-06-05 14:29:05.659289637 +0200
++++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-06-05 15:21:42.274334918 +0200
 @@ -2,6 +2,7 @@
  
  #include "/Lib/UniformDeclare.glsl"
