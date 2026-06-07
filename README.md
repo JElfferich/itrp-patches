@@ -6,13 +6,15 @@
 - More in the future.
 
 ## How to apply
+Requirements for Windows:
+- [Git](https://git-scm.com/install/windows)
 
 ```bash
-# On Windows with Git Bash
-git apply -p1 --directory=<path_to_folder> itrp.patch
-
-# For Linux and MacOS
-patch -p1 -d <path_to_folder> < itrp.patch
+# If on Windows run the commands with Git Bash.
+git clone https://github.com/JElfferich/itrp-patches.git
+cd itrp-patches
+# Extract IterationRP to itrp-patches folder and then edit and run the command below.
+patch -p1 -d <itrp_folder_name> < itrp.patch
 ```
 
 ## License
