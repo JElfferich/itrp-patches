@@ -5,6 +5,8 @@
 - OpenDRT display rendering transform (tonemapping) by [Jed Smith](https://github.com/jedypod/open-display-transform) for polished and rich color rendering.
 - More in the future.
 
+The patch targets **IterationRP Alpha 0.8.26**.
+
 ## How to apply
 Requirements for Windows:
 - [Git](https://git-scm.com/install/windows)
@@ -13,7 +15,8 @@ Requirements for Windows:
 # If on Windows run the commands with Git Bash.
 git clone https://github.com/JElfferich/itrp-patches.git
 cd itrp-patches
-# Extract IterationRP to itrp-patches folder and then edit and run the command below.
+# Extract the shader zip into a folder named "iterationRP Alpha 0.8.26",
+# then edit and run the command below.
 patch -p1 -d <itrp_folder_name> < itrp.patch
 ```
 

@@ -1,7 +1,7 @@
-diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/lang/en_us.lang" "iterationRP Alpha 0.8.22 patched/shaders/lang/en_us.lang"
---- "iterationRP Alpha 0.8.22/shaders/lang/en_us.lang"	2026-05-07 00:04:10.000000000 +0200
-+++ "iterationRP Alpha 0.8.22 patched/shaders/lang/en_us.lang"	2026-06-07 22:52:30.714308507 +0200
-@@ -655,6 +655,29 @@
+diff -urwN "iterationRP Alpha 0.8.26/shaders/lang/en_us.lang" "iterationRP Alpha 0.8.26 patched/shaders/lang/en_us.lang"
+--- "iterationRP Alpha 0.8.26/shaders/lang/en_us.lang"	2026-07-24 00:25:16.000000000 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/lang/en_us.lang"	2026-08-01 21:41:31.058418899 +0200
+@@ -667,6 +667,29 @@
  option.TONEMAP_OPERATOR=§cTonemap
  value.TONEMAP_OPERATOR.GT=GT(Uchimura)
  value.TONEMAP_OPERATOR.None=None
@@ -31,10 +31,10 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/lang/en_us.lang" "it
  option.AGX_EV=AgX Dynamic Range
  suffix.AGX_EV=EV
  option.AGX_HDR_EV=AgX HDR Dynamic Range
-diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/OpenDRT.glsl"
---- "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl"	1970-01-01 01:00:00.000000000 +0100
-+++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/OpenDRT.glsl"	2026-06-07 22:52:04.739741543 +0200
-@@ -0,0 +1,630 @@
+diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/OpenDRT.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/OpenDRT.glsl"
+--- "iterationRP Alpha 0.8.26/shaders/Lib/OpenDRT.glsl"	1970-01-01 01:00:00.000000000 +0100
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/OpenDRT.glsl"	2026-08-01 21:39:40.613639773 +0200
+@@ -0,0 +1,610 @@
 +/* OpenDRT v1.1.0 for GLSL
 + *
 + * Ported from the DCTL implementation by Jed Smith
@@ -150,9 +150,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    // Purity compress high
 +    bool pt_enable; // Compresses purity as intensity increases.
 +    float pt_lml;   // Limit the strength of purity compression as intensity decreases, for all hue angles.
-+    float pt_lml_r; // Limit the strength of purity compression as intensity decreases, for reds.
-+    float pt_lml_g; // Limit the strength of purity compression as intensity decreases, for greens.
-+    float pt_lml_b; // Limit the strength of purity compression as intensity decreases, for blues.
++    vec3 pt_lml_rgb; // Per-channel limit of purity compression as intensity decreases.
 +    float pt_lmh;   // Limit the strength of purity compression as intensity increases.
 +    float pt_lmh_r; // Limit the strength of red purity compression as intensity increases.
 +    float pt_lmh_b; // Limit the strength of blue purity compression as intensity increases.
@@ -176,18 +174,14 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    // Brilliance (pre-tonescale)
 +    bool brl_enable; // Brilliance scales the intensity of more pure stimuli before tonescale.
 +    float brl;       // Global intensity scale of high-purity stimuli.
-+    float brl_r;     // Scale intensity of high-purity reds.
-+    float brl_g;     // Scale intensity of high-purity greens.
-+    float brl_b;     // Scale intensity of high-purity blues.
++    vec3 brl_rgb;    // Per-channel scale intensity of high-purity stimuli.
 +    float brl_rng;   // As Brilliance Range is increased, the adjustments affect more of the low intensity values.
 +    float brl_st;    // As Brilliance Strength is increased, the adjustments affect more of the low purity values.
 +
 +    // Post brilliance
 +    bool brlp_enable; // Post Brilliance scales the intensity of more pure stimuli after purity compression.
 +    float brlp;       // Global post purity compression brilliance adjustment.
-+    float brlp_r;     // Scale intensity of high-purity red, post purity compression.
-+    float brlp_g;     // Scale intensity of high-purity green, post purity compression.
-+    float brlp_b;     // Scale intensity of high-purity blue, post purity compression.
++    vec3 brlp_rgb;   // Per-channel post brilliance scale.
 +
 +    // Hue contrast
 +    bool hc_enable; // Hue Contrast compresses hue angle towards the primary at the bottom.
@@ -196,27 +190,26 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +
 +    // Hue shift RGB
 +    bool hs_rgb_enable; // Hue Shift RGB adds hue distortion to the red green and blue primary hue angles.
-+    float hs_r;         // Amount to distort the red hue angle towards yellow as intensity increases.
-+    float hs_r_rng;     // Range of the red hueshift.
-+    float hs_g;         // Amount to distort the green hue angle towards yellow as intensity increases.
-+    float hs_g_rng;     // Range of the green hueshift.
-+    float hs_b;         // Amount to distort the blue hue angle towards cyan as intensity increases.
-+    float hs_b_rng;     // Range of the blue hueshift.
++    vec3 hs_rgb;        // Per-primary hue shift amount (RGB).
++    vec3 hs_rgb_rng;    // Per-primary hue shift range (RGB).
 +
 +    // Hue shift CMY
 +    bool hs_cmy_enable; // Hue Shift CMY adds hue distortion to secondary hue angles as intensity decreases.
-+    float hs_c;         // Amount to distort the cyan hue angle towards blue as intensity decreases.
-+    float hs_c_rng;     // Range of the cyan hueshift.
-+    float hs_m;         // Amount to distort the magenta hue angle towards blue as intensity decreases.
-+    float hs_m_rng;     // Range of the magenta hueshift.
-+    float hs_y;         // Amount to distort the yellow hue angle towards red as intensity decreases.
-+    float hs_y_rng;     // Range of the yellow hueshift.
++    vec3 hs_cmy;        // Per-secondary hue shift amount (CMY).
++    vec3 hs_cmy_rng;    // Per-secondary hue shift range (CMY).
 +};
 +
 +// Functions
 +// Utility math
 +float opendrt_spowf(float a, float b) {
 +    return a <= 0.0 ? a : pow(max(a, 0.0), b);
++}
++vec3 opendrt_spowf(vec3 a, vec3 b) {
++    return vec3(
++        a.x <= 0.0 ? a.x : pow(max(a.x, 0.0), b.x),
++        a.y <= 0.0 ? a.y : pow(max(a.y, 0.0), b.y),
++        a.z <= 0.0 ? a.z : pow(max(a.z, 0.0), b.z)
++    );
 +}
 +
 +// Tonescale helper functions
@@ -255,19 +248,17 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    p.tn_lcon_enable = false; p.tn_lcon = 0.0; p.tn_lcon_w = 0.5;
 +    p.cwp = 2; p.cwp_lm = 0.25;
 +    p.rs_sa = 0.35; p.rs_rw = 0.25; p.rs_bw = 0.55;
-+    p.pt_enable = true; p.pt_lml = 0.25; p.pt_lml_r = 0.5; p.pt_lml_g = 0.0; p.pt_lml_b = 0.1;
++    p.pt_enable = true; p.pt_lml = 0.25; p.pt_lml_rgb = vec3(0.5, 0.0, 0.1);
 +    p.pt_lmh = 0.25; p.pt_lmh_r = 0.5; p.pt_lmh_b = 0.0; p.pt_hdr = 0.5;
 +    p.ptl_enable = true; p.ptl_c = 0.06; p.ptl_m = 0.08; p.ptl_y = 0.06;
 +    p.ptm_enable = true; p.ptm_low = 0.4; p.ptm_low_rng = 0.25; p.ptm_low_st = 0.5;
 +    p.ptm_high = -0.8; p.ptm_high_rng = 0.35; p.ptm_high_st = 0.4;
-+    p.brl_enable = true; p.brl = 0.0; p.brl_r = -2.5; p.brl_g = -1.5; p.brl_b = -1.5;
++    p.brl_enable = true; p.brl = 0.0; p.brl_rgb = vec3(-2.5, -1.5, -1.5);
 +    p.brl_rng = 0.5; p.brl_st = 0.35;
-+    p.brlp_enable = true; p.brlp = -0.5; p.brlp_r = -1.25; p.brlp_g = -1.25; p.brlp_b = -0.25;
++    p.brlp_enable = true; p.brlp = -0.5; p.brlp_rgb = vec3(-1.25, -1.25, -0.25);
 +    p.hc_enable = true; p.hc_r = 1.0; p.hc_r_rng = 0.3;
-+    p.hs_rgb_enable = true; p.hs_r = 0.6; p.hs_r_rng = 0.6;
-+    p.hs_g = 0.35; p.hs_g_rng = 1.0; p.hs_b = 0.66; p.hs_b_rng = 1.0;
-+    p.hs_cmy_enable = true; p.hs_c = 0.25; p.hs_c_rng = 1.0;
-+    p.hs_m = 0.0; p.hs_m_rng = 1.0; p.hs_y = 0.0; p.hs_y_rng = 1.0;
++    p.hs_rgb_enable = true; p.hs_rgb = vec3(0.6, 0.35, 0.66); p.hs_rgb_rng = vec3(0.6, 1.0, 1.0);
++    p.hs_cmy_enable = true; p.hs_cmy = vec3(0.25, 0.0, 0.0); p.hs_cmy_rng = vec3(1.0, 1.0, 1.0);
 +    return p;
 +}
 +
@@ -275,11 +266,11 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    OpenDRTParams p = opendrt_preset_default();
 +    p.tn_con = 1.05; p.tn_toe = 0.1; p.tn_off = 0.01;
 +    p.tn_lcon_enable = true; p.tn_lcon = 1.5; p.tn_lcon_w = 0.2;
-+    p.pt_lml = 0.25; p.pt_lml_r = 0.45; p.pt_lml_b = 0.1;
++    p.pt_lml = 0.25; p.pt_lml_rgb = vec3(0.45, 0.0, 0.1);
 +    p.pt_lmh = 0.25; p.pt_lmh_r = 0.25; p.pt_lmh_b = 0.0;
 +    p.ptm_low = 1.0; p.ptm_low_rng = 0.4; p.ptm_high_rng = 0.66; p.ptm_high_st = 0.6;
-+    p.brlp = 0.0; p.brlp_r = -1.7; p.brlp_g = -2.0; p.brlp_b = -0.5;
-+    p.hs_r_rng = 0.8; p.hs_c = 0.15;
++    p.brlp = 0.0; p.brlp_rgb = vec3(-1.7, -2.0, -0.5);
++    p.hs_rgb_rng.x = 0.8; p.hs_cmy.x = 0.15;
 +    return p;
 +}
 +
@@ -288,17 +279,16 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    p.tn_con = 1.6; p.tn_toe = 0.01; p.tn_off = 0.01;
 +    p.tn_lcon_enable = true; p.tn_lcon = 0.25; p.tn_lcon_w = 0.75;
 +    p.rs_sa = 0.25;
-+    p.pt_lml = 0.15; p.pt_lml_g = 0.15;
++    p.pt_lml = 0.15; p.pt_lml_rgb.g = 0.15;
 +    p.ptl_y = 0.05;
 +    p.pt_lmh_r = 0.15; p.pt_lmh_b = 0.15;
 +    p.ptm_low = 0.5; p.ptm_low_rng = 0.5; p.ptm_high_rng = 0.5; p.ptm_high_st = 0.5;
-+    p.brl = -1.0; p.brl_r = -2.0; p.brl_g = -2.0; p.brl_b = 0.0;
++    p.brl = -1.0; p.brl_rgb = vec3(-2.0, -2.0, 0.0);
 +    p.brl_rng = 0.25; p.brl_st = 0.25;
-+    p.brlp = -1.0; p.brlp_r = -0.5; p.brlp_g = -0.25; p.brlp_b = -0.25;
++    p.brlp = -1.0; p.brlp_rgb = vec3(-0.5, -0.25, -0.25);
 +    p.hc_r_rng = 0.4;
-+    p.hs_r_rng = 1.15; p.hs_g = 0.8; p.hs_g_rng = 1.25; p.hs_b = 0.6; p.hs_b_rng = 1.0;
-+    p.hs_c = 0.25; p.hs_c_rng = 0.25; p.hs_m = 0.25; p.hs_m_rng = 0.5;
-+    p.hs_y = 0.35; p.hs_y_rng = 0.5;
++    p.hs_rgb_rng.x = 1.15; p.hs_rgb.g = 0.8; p.hs_rgb_rng.g = 1.25; p.hs_rgb.b = 0.6; p.hs_rgb_rng.b = 1.0;
++    p.hs_cmy = vec3(0.25, 0.25, 0.35); p.hs_cmy_rng = vec3(0.25, 0.5, 0.5);
 +    return p;
 +}
 +
@@ -306,16 +296,16 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    OpenDRTParams p = opendrt_preset_default();
 +    p.tn_con = 1.5; p.tn_toe = 0.003; p.tn_off = 0.003;
 +    p.tn_lcon_enable = true; p.tn_lcon = 0.4;
-+    p.pt_lml = 0.5; p.pt_lml_r = 1.0; p.pt_lml_b = 0.5;
++    p.pt_lml = 0.5; p.pt_lml_rgb = vec3(1.0, 0.0, 0.5);
 +    p.pt_lmh = 0.15; p.pt_lmh_r = 0.15; p.pt_lmh_b = 0.15;
 +    p.ptl_c = 0.05; p.ptl_m = 0.06; p.ptl_y = 0.05;
 +    p.ptm_low = 0.8; p.ptm_low_rng = 0.5; p.ptm_low_st = 0.4;
 +    p.ptm_high_rng = 0.4; p.ptm_high_st = 0.4;
-+    p.brl_r = -1.25; p.brl_g = -1.25; p.brl_b = -0.25;
++    p.brl_rgb = vec3(-1.25, -1.25, -0.25);
 +    p.brl_rng = 0.3; p.brl_st = 0.5;
-+    p.brlp_r = -1.25; p.brlp_g = -1.25; p.brlp_b = -0.5;
++    p.brlp_rgb = vec3(-1.25, -1.25, -0.5);
 +    p.hc_r_rng = 0.4;
-+    p.hs_r = 0.5; p.hs_r_rng = 0.8; p.hs_b = 0.5; p.hs_b_rng = 1.0; p.hs_y = 0.25;
++    p.hs_rgb.x = 0.5; p.hs_rgb_rng.x = 0.8; p.hs_rgb.b = 0.5; p.hs_rgb_rng.b = 1.0; p.hs_cmy.z = 0.25;
 +    return p;
 +}
 +
@@ -326,16 +316,16 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    p.tn_lcon_enable = true; p.tn_lcon = 0.5; p.tn_lcon_w = 2.0;
 +    p.cwp = 1;
 +    p.rs_sa = 0.25; p.rs_rw = 0.2; p.rs_bw = 0.5;
-+    p.pt_lml = 0.0; p.pt_lml_r = 0.5; p.pt_lml_g = 0.15;
++    p.pt_lml = 0.0; p.pt_lml_rgb = vec3(0.5, 0.15, 0.1);
 +    p.pt_lmh = 0.0; p.pt_lmh_r = 0.1; p.pt_lmh_b = 0.0;
 +    p.ptl_c = 0.05; p.ptl_y = 0.05;
 +    p.ptm_low = 0.8; p.ptm_low_rng = 0.35; p.ptm_high = -0.9; p.ptm_high_rng = 0.5; p.ptm_high_st = 0.3;
-+    p.brl = -3.0; p.brl_r = 0.0; p.brl_g = 0.0; p.brl_b = 1.0;
++    p.brl = -3.0; p.brl_rgb = vec3(0.0, 0.0, 1.0);
 +    p.brl_rng = 0.8; p.brl_st = 0.15;
-+    p.brlp = -1.0; p.brlp_r = -1.0; p.brlp_g = -1.0; p.brlp_b = 0.0;
++    p.brlp = -1.0; p.brlp_rgb = vec3(-1.0, -1.0, 0.0);
 +    p.hc_r = 0.5; p.hc_r_rng = 0.25;
-+    p.hs_r_rng = 1.0; p.hs_g_rng = 2.0; p.hs_b_rng = 1.5;
-+    p.hs_c = 0.35; p.hs_m = 0.25; p.hs_y = 0.35; p.hs_y_rng = 0.5;
++    p.hs_rgb_rng = vec3(1.0, 2.0, 1.5);
++    p.hs_cmy = vec3(0.35, 0.25, 0.35); p.hs_cmy_rng.z = 0.5;
 +    return p;
 +}
 +
@@ -346,18 +336,17 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    p.tn_lcon_enable = true; p.tn_lcon = 1.0; p.tn_lcon_w = 0.75;
 +    p.cwp = 3;
 +    p.rs_sa = 0.2;
-+    p.pt_lml = 0.15; p.pt_lml_r = 0.0; p.pt_lml_g = 0.0; p.pt_lml_b = 0.0;
++    p.pt_lml = 0.15; p.pt_lml_rgb = vec3(0.0);
 +    p.pt_lmh = 0.0; p.pt_lmh_r = 0.0; p.pt_lmh_b = 0.0;
 +    p.ptl_c = 0.05; p.ptl_y = 0.05;
 +    p.ptm_low = 0.25; p.ptm_low_rng = 0.25; p.ptm_low_st = 0.8;
 +    p.ptm_high_rng = 0.6; p.ptm_high_st = 0.25;
-+    p.brl = -2.0; p.brl_r = -2.0; p.brl_g = -2.0;
++    p.brl = -2.0; p.brl_rgb = vec3(-2.0, -2.0, 0.0);
 +    p.brl_rng = 0.35; p.brl_st = 0.35;
-+    p.brlp_r = -1.0; p.brlp_g = -1.0; p.brlp_b = -1.0;
++    p.brlp = 0.0; p.brlp_rgb = vec3(-1.0);
 +    p.hc_r_rng = 0.25;
-+    p.hs_r = 0.7; p.hs_r_rng = 1.33; p.hs_g = 1.0; p.hs_g_rng = 2.0;
-+    p.hs_b = 0.75; p.hs_b_rng = 2.0;
-+    p.hs_c = 1.0; p.hs_c_rng = 0.5; p.hs_m = 1.0; p.hs_y = 1.0; p.hs_y_rng = 0.765;
++    p.hs_rgb = vec3(0.7, 1.0, 0.75); p.hs_rgb_rng = vec3(1.33, 2.0, 2.0);
++    p.hs_cmy = vec3(1.0, 1.0, 1.0); p.hs_cmy_rng = vec3(0.5, 1.0, 0.765);
 +    return p;
 +}
 +
@@ -366,18 +355,17 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    p.tn_con = 1.8; p.tn_toe = 0.001; p.tn_off = 0.015;
 +    p.tn_lcon_enable = true; p.tn_lcon = 1.0; p.tn_lcon_w = 1.0;
 +    p.cwp = 5;
-+    p.pt_lml = 0.0; p.pt_lml_r = 0.5; p.pt_lml_b = 0.15;
++    p.pt_lml = 0.0; p.pt_lml_rgb = vec3(0.5, 0.0, 0.15);
 +    p.pt_lmh_r = 0.25;
 +    p.ptl_c = 0.05; p.ptl_m = 0.06; p.ptl_y = 0.05;
 +    p.ptm_low = 0.4; p.ptm_low_rng = 0.35; p.ptm_low_st = 0.66;
 +    p.ptm_high = -0.6; p.ptm_high_rng = 0.45; p.ptm_high_st = 0.45;
-+    p.brl = -2.0; p.brl_r = -4.5; p.brl_g = -3.0; p.brl_b = -4.0;
++    p.brl = -2.0; p.brl_rgb = vec3(-4.5, -3.0, -4.0);
 +    p.brl_rng = 0.35; p.brl_st = 0.3;
-+    p.brlp_r = -2.0; p.brlp_g = -1.0; p.brlp_b = -0.5;
++    p.brlp = 0.0; p.brlp_rgb = vec3(-2.0, -1.0, -0.5);
 +    p.hc_r_rng = 0.35;
-+    p.hs_r = 0.66; p.hs_r_rng = 1.0; p.hs_g = 0.5; p.hs_g_rng = 2.0;
-+    p.hs_b = 0.85; p.hs_b_rng = 2.0;
-+    p.hs_c = 0.0; p.hs_m = 0.25; p.hs_y = 0.66; p.hs_y_rng = 0.66;
++    p.hs_rgb = vec3(0.66, 0.5, 0.85); p.hs_rgb_rng = vec3(1.0, 2.0, 2.0);
++    p.hs_cmy = vec3(0.0, 0.25, 0.66); p.hs_cmy_rng.z = 0.66;
 +    return p;
 +}
 +
@@ -511,7 +499,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    // Brilliance (pre-tonescale)
 +    if (p.brl_enable) {
 +        float brl_tsf = opendrt_spowf(tsn / (tsn + 1.0), 1.0 - p.brl_rng);
-+        float brl_exf = (p.brl + p.brl_r * ha_rgb.x + p.brl_g * ha_rgb.y + p.brl_b * ha_rgb.z) *
++        float brl_exf = (p.brl + dot(p.brl_rgb, ha_rgb)) *
 +                        opendrt_spowf(ach_d, 1.0 / p.brl_st);
 +        float brl_ex = pow(2.0, brl_exf * (brl_exf < 0.0 ? brl_tsf : 1.0 - brl_tsf));
 +        tsn *= brl_ex;
@@ -571,12 +559,8 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +
 +    // Hue shift RGB
 +    if (p.hs_rgb_enable) {
-+        vec3 hs_rgb = vec3(
-+            ha_rgb_hs.x * ach_d * opendrt_spowf(tsn_pt, 1.0 / p.hs_r_rng),
-+            ha_rgb_hs.y * ach_d * opendrt_spowf(tsn_pt, 1.0 / p.hs_g_rng),
-+            ha_rgb_hs.z * ach_d * opendrt_spowf(tsn_pt, 1.0 / p.hs_b_rng)
-+        );
-+        vec3 hsf = vec3(hs_rgb.x * p.hs_r, hs_rgb.y * -p.hs_g, hs_rgb.z * -p.hs_b);
++        vec3 _hs_rgb_w = opendrt_spowf(vec3(tsn_pt), 1.0 / p.hs_rgb_rng) * (ha_rgb_hs * ach_d);
++        vec3 hsf = _hs_rgb_w * vec3(p.hs_rgb.x, -p.hs_rgb.y, -p.hs_rgb.z);
 +        hsf = vec3(hsf.z - hsf.y, hsf.x - hsf.z, hsf.y - hsf.x);
 +        rgb += hsf;
 +    }
@@ -584,19 +568,15 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +    // Hue shift CMY
 +    if (p.hs_cmy_enable) {
 +        float tsn_pt_compl = 1.0 - tsn_pt;
-+        vec3 hs_cmy = vec3(
-+            ha_cmy.x * ach_d * opendrt_spowf(tsn_pt_compl, 1.0 / p.hs_c_rng),
-+            ha_cmy.y * ach_d * opendrt_spowf(tsn_pt_compl, 1.0 / p.hs_m_rng),
-+            ha_cmy.z * ach_d * opendrt_spowf(tsn_pt_compl, 1.0 / p.hs_y_rng)
-+        );
-+        vec3 hsf = vec3(hs_cmy.x * -p.hs_c, hs_cmy.y * p.hs_m, hs_cmy.z * p.hs_y);
++        vec3 _hs_cmy_w = opendrt_spowf(vec3(tsn_pt_compl), 1.0 / p.hs_cmy_rng) * (ha_cmy * ach_d);
++        vec3 hsf = _hs_cmy_w * vec3(-p.hs_cmy.x, p.hs_cmy.y, p.hs_cmy.z);
 +        hsf = vec3(hsf.z - hsf.y, hsf.x - hsf.z, hsf.y - hsf.x);
 +        rgb += hsf;
 +    }
 +
 +    // Purity compression
 +    float pt_lml_p = 1.0 + 4.0 * (1.0 - tsn_pt) *
-+                     (p.pt_lml + p.pt_lml_r * ha_rgb_hs.x + p.pt_lml_g * ha_rgb_hs.y + p.pt_lml_b * ha_rgb_hs.z);
++                     (p.pt_lml + dot(p.pt_lml_rgb, ha_rgb_hs));
 +    float ptf = 1.0 - opendrt_spowf(tsn_pt, pt_lml_p);
 +    float pt_lmh_p = (1.0 - ach_d * (p.pt_lmh_r * ha_rgb_hs.x + p.pt_lmh_b * ha_rgb_hs.z)) *
 +                     (1.0 - p.pt_lmh * ach_d);
@@ -643,7 +623,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +        float brlp_ach_d = length(brlp_opp) / 4.0;
 +        brlp_ach_d = 1.1 * (brlp_ach_d * brlp_ach_d / (brlp_ach_d + 0.1));
 +        vec3 brlp_ha_rgb = ach_d * ha_rgb;
-+        float brlp_m = p.brlp + p.brlp_r * brlp_ha_rgb.x + p.brlp_g * brlp_ha_rgb.y + p.brlp_b * brlp_ha_rgb.z;
++        float brlp_m = p.brlp + dot(p.brlp_rgb, brlp_ha_rgb);
 +        float brlp_ex = pow(2.0, brlp_m * brlp_ach_d * tsn);
 +        rgb *= brlp_ex;
 +    }
@@ -665,10 +645,10 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/OpenDRT.glsl" "i
 +
 +    return rgb;
 +}
-diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"
---- "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_FS.glsl"	2026-05-06 21:58:52.000000000 +0200
-+++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-06-07 22:52:53.106785891 +0200
-@@ -2,6 +2,7 @@
+diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Programs/Final_FS.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/Programs/Final_FS.glsl"
+--- "iterationRP Alpha 0.8.26/shaders/Lib/Programs/Final_FS.glsl"	2026-07-19 17:48:48.000000000 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-08-01 21:40:31.659464548 +0200
+@@ -5,6 +5,7 @@
  
  #include "/Lib/UniformDeclare.glsl"
  #include "/Lib/Utilities.glsl"
@@ -676,7 +656,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_F
  
  //#undef HDR_ENABLED
  
-@@ -32,6 +33,108 @@
+@@ -35,6 +36,94 @@
  	return a / b;
  }
  
@@ -713,9 +693,7 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_F
 +    // Purity compression
 +    // opendrt_params.pt_enable = 1;   // Compresses purity as intensity increases. Bare minimum functionality for a picture formation.
 +    // opendrt_params.pt_lml = 0.5;    // Limit the strength of purity compression as intensity decreases, for all hue angles. A higher value will compress purity less in midtones and shadows.
-+    // opendrt_params.pt_lml_r = 1.0;  // Limit the strength of purity compression as intensity decreases, for reds. A higher value will compress purity less in midtones and shadows.
-+    // opendrt_params.pt_lml_g = 0.0;  // Limit the strength of purity compression as intensity decreases, for all greens. A higher value will compress purity less in midtones and shadows.
-+    // opendrt_params.pt_lml_b = 0.5;  // Limit the strength of purity compression as intensity decreases, for blues. A higher value will compress purity less in midtones and shadows.
++    // opendrt_params.pt_lml_rgb = vec3(1.0, 0.0, 0.5); // Per-channel limit as intensity decreases (R, G, B). A higher value will compress purity less in midtones and shadows.
 +    // opendrt_params.pt_lmh = 0.15;    // Limit the strength of purity compression as intensity increases. Can be helpful to keep some color in high intensity high purity light sources. Use with caution as this can cause gradient disruptions.
 +    // opendrt_params.pt_lmh_r = 0.15;  // Limit the strength of red purity compression as intensity increases. Can be helpful to keep some color in high intensity fire and pure red light sources. Use with caution as this can cause gradient disruptions.
 +    // opendrt_params.pt_lmh_b = 0.15;  // Limit the strength of blue purity compression as intensity increases. Can be helpful to keep some color in high intensity pure blue light sources. Use with caution as this can cause gradient disruptions.
@@ -738,18 +716,14 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_F
 +    // Brilliance
 +    // opendrt_params.brl_enable = 1; // Brilliance scales the intensity of more pure stimuli. The brilliance module is applied before the tonescale is taken for purity compression. This means that if you darken reds with this adjustment, the purity compression will also be reduced. This behavior is natural and smooth.
 +    // opendrt_params.brl = 0.0;      // Global intensity scale of high-purity stimuli.
-+    // opendrt_params.brl_r = -1.25;    // Scale intensity of high-purity reds.
-+    // opendrt_params.brl_g = -1.25;    // Scale intensity of high-purity greens.
-+    // opendrt_params.brl_b = -1.25;    // Scale intensity of high-purity blues.
++    // opendrt_params.brl_rgb = vec3(-1.25, -1.25, -1.25); // Per-channel intensity scale of high-purity stimuli (R, G, B).
 +    // opendrt_params.brl_rng = 0.3;  // As Brilliance Range is increased, the brilliance adjustments affect more the low intensity values of the image data.
 +    // opendrt_params.brl_st = 0.5;   // As Brilliance Strength is increased, the brilliance adjustments affect more the low purity values of the image data.
 +
 +    // Post brilliance
 +    // opendrt_params.brlp_enable = 1; // Post Brilliance scales the intensity of more pure stimuli after purity compression hue shifts have been applied. With the OpenDRT algorithm it is possible to get high intensity high purity values going out of the top of the display-referred gamut volume, which can cause discontinuities in gradients, especially on the RGB primaries. This module can help compensate for this.
 +    // opendrt_params.brlp = -0.5;      // Global post purity compression brilliance adjustment
-+    // opendrt_params.brlp_r = -1.25;    // Scale intensity of high-purity red, post purity compression. This can help reduce rings or halos around high purity light sources.
-+    // opendrt_params.brlp_g = -1.25;    // Scale intensity of high-purity green, post purity compression. This can help reduce rings or halos around high purity light sources.
-+    // opendrt_params.brlp_b = -0.5;    // Scale intensity of high-purity blue, post purity compression. This can help reduce rings or halos around high purity light sources.
++    // opendrt_params.brlp_rgb = vec3(-1.25, -1.25, -0.5); // Per-channel post purity compression brilliance adjustment (R, G, B). This can help reduce rings or halos around high purity light sources.
 +
 +    // Hue contrast
 +    // opendrt_params.hc_enable = 1;  // Hue Contrast compresses hue angle towards the primary at the bottom end and expands the hue angle towards the secondary as intensity increases. It also increases purity as it compresses, and decreases purity as it expands. This leads to a nice creatively controllable simulation of this effect from per-channel tonescales. For OpenDRT we only keep the red hue angle control since it is the most useful.
@@ -758,21 +732,13 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_F
 +
 +    // Hueshift RGB
 +    // opendrt_params.hs_rgb_enable = 1; // Hue Shift RGB adds hue distortion to the red green and blue primary hue angles as intensity increases. By default OpenDRT will compress purity in a straight line in RGB/Chromaticity space. This can lead to perceived hue shifts due to the Abney Effect, for example a pure blue will perceptually shift towards purple as it desaturates. To compensate for this, and to use as a creative tool, this module allows creative control over the path that red green and blue hue angles take as their purity is compressed.
-+    // opendrt_params.hs_r = 0.5;        // Amount to distort the red hue angle towards yellow as intensity increases.
-+    // opendrt_params.hs_r_rng = 0.8;    // Range of the red hueshift: higher values affect more of the lower intensity range.
-+    // opendrt_params.hs_g = 0.35;        // Amount to distort the green hue angle towards yellow as intensity increases.
-+    // opendrt_params.hs_g_rng = 1.0;    // Range of the green hueshift: higher values affect more of the lower intensity range.
-+    // opendrt_params.hs_b = 0.5;        // Amount to distort the blue hue angle towards cyan as intensity increases.
-+    // opendrt_params.hs_b_rng = 1.0;    // Range of the blue hueshift: higher values affect more of the lower intensity range.
++    // opendrt_params.hs_rgb = vec3(0.5, 0.35, 0.5);    // Per-primary amount to distort the hue angle as intensity increases (R towards yellow, G towards yellow, B towards cyan).
++    // opendrt_params.hs_rgb_rng = vec3(0.8, 1.0, 1.0); // Per-primary range of the hueshift: higher values affect more of the lower intensity range.
 +
 +    // Hueshift CMY
 +    // opendrt_params.hs_cmy_enable = 1; // Hue Shift CMY adds hue distortion to the cyan magenta and yellow secondary hue angles as intensity decreases. This module allows some very minimal adjustments of secondary hue angles as a creative tool.
-+    // opendrt_params.hs_c = 0.25;        // Amount to distort the cyan hue angle towards blue as intensity decreases.
-+    // opendrt_params.hs_c_rng = 1.0;    // Range of the cyan hueshift: higher values affect more of the upper intensity range.
-+    // opendrt_params.hs_m = 0.0;        // Amount to distort the magenta hue angle towards blue as intensity decreases.
-+    // opendrt_params.hs_m_rng = 1.0;    // Range of the magenta hueshift: higher values affect more of the upper intensity range.
-+    // opendrt_params.hs_y = 0.25;        // Amount to distort the yellow hue angle towards red as intensity decreases.
-+    // opendrt_params.hs_y_rng = 1.0;    // Range of the yellow hueshift: higher values affect more of the upper intensity range.
++    // opendrt_params.hs_cmy = vec3(0.25, 0.0, 0.25);   // Per-secondary amount to distort the hue angle as intensity decreases (C towards blue, M towards blue, Y towards red).
++    // opendrt_params.hs_cmy_rng = vec3(1.0, 1.0, 1.0); // Per-secondary range of the hueshift: higher values affect more of the upper intensity range.
 +
 +    // Surround
 +    // opendrt_params.tn_su = 1; // OpenDRT includes a simple surround compensation model. DCI cinema presets use dark surround. Rec.1886 uses dim surround. And sRGB Display uses bright surround. This functionality should provide a better perceptual match between viewing environments.
@@ -785,10 +751,10 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Programs/Final_F
  vec3 ACES(vec3 color){
  	color *= 1.4;
  
-diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Settings.glsl" "iterationRP Alpha 0.8.22 patched/shaders/Lib/Settings.glsl"
---- "iterationRP Alpha 0.8.22/shaders/Lib/Settings.glsl"	2026-05-06 20:48:50.000000000 +0200
-+++ "iterationRP Alpha 0.8.22 patched/shaders/Lib/Settings.glsl"	2026-06-07 22:52:07.126794258 +0200
-@@ -697,7 +697,9 @@
+diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Settings.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/Settings.glsl"
+--- "iterationRP Alpha 0.8.26/shaders/Lib/Settings.glsl"	2026-07-22 07:39:26.000000000 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Settings.glsl"	2026-08-01 21:41:06.599026578 +0200
+@@ -711,7 +711,9 @@
    //#define GLARE_FLARE_SHADOWBASED
  
  //Color---------------------------------
@@ -796,17 +762,17 @@ diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/Lib/Settings.glsl" "
 +	#define TONEMAP_OPERATOR 	OpenDRT // [OpenDRT AgX ACES GT None]
 +	#define OPENDRT_PRESET      opendrt_preset_colorful // [opendrt_preset_default opendrt_preset_arriba opendrt_preset_sylvan opendrt_preset_colorful opendrt_preset_aery opendrt_preset_dystopic opendrt_preset_umbra]
 +	#define OPENDRT_TONESCALE_PRESET  opendrt_tonescale_default // [opendrt_tonescale_default opendrt_tonescale_low_contrast opendrt_tonescale_medium_contrast opendrt_tonescale_high_contrast opendrt_tonescale_arriba opendrt_tonescale_sylvan opendrt_tonescale_colorful opendrt_tonescale_aery opendrt_tonescale_dystopic opendrt_tonescale_umbra opendrt_tonescale_aces_1x opendrt_tonescale_aces_2 opendrt_tonescale_marvelous opendrt_tonescale_dagrinchi]
- 	#define AGX_EV 				14.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
+ 	#define AGX_EV 				13.5 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
  	#define AGX_HDR_EV			12.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
  	#define AGX_HDR_MIDGREY		0.16 // [0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3]
-diff '--color=auto' -urwN "iterationRP Alpha 0.8.22/shaders/shaders.properties" "iterationRP Alpha 0.8.22 patched/shaders/shaders.properties"
---- "iterationRP Alpha 0.8.22/shaders/shaders.properties"	2026-05-05 19:54:42.000000000 +0200
-+++ "iterationRP Alpha 0.8.22 patched/shaders/shaders.properties"	2026-06-07 22:49:28.210980439 +0200
-@@ -1125,6 +1125,7 @@
+diff -urwN "iterationRP Alpha 0.8.26/shaders/shaders.properties" "iterationRP Alpha 0.8.26 patched/shaders/shaders.properties"
+--- "iterationRP Alpha 0.8.26/shaders/shaders.properties"	2026-07-22 07:43:48.000000000 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/shaders.properties"	2026-08-01 21:41:16.147179835 +0200
+@@ -1082,6 +1082,7 @@
  
  
  	screen.COLOR =  TONEMAP_OPERATOR <empty>  \
-+                    	OPENDRT_PRESET OPENDRT_TONESCALE_PRESET \
++	                	OPENDRT_PRESET OPENDRT_TONESCALE_PRESET \
  					AGX_EV AGX_HDR_EV \
  					ABNEY_EFFECT_CORRECTION AGX_HDR_MIDGREY \
  					<empty> <empty> \
