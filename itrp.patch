@@ -1,6 +1,6 @@
 diff -urwN "iterationRP Alpha 0.8.26/shaders/lang/en_us.lang" "iterationRP Alpha 0.8.26 patched/shaders/lang/en_us.lang"
 --- "iterationRP Alpha 0.8.26/shaders/lang/en_us.lang"	2026-07-24 00:25:16.000000000 +0200
-+++ "iterationRP Alpha 0.8.26 patched/shaders/lang/en_us.lang"	2026-08-01 22:07:23.797362367 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/lang/en_us.lang"	2026-08-01 22:10:46.115886814 +0200
 @@ -667,6 +667,32 @@
  option.TONEMAP_OPERATOR=§cTonemap
  value.TONEMAP_OPERATOR.GT=GT(Uchimura)
@@ -30,13 +30,13 @@ diff -urwN "iterationRP Alpha 0.8.26/shaders/lang/en_us.lang" "iterationRP Alpha
 +value.OPENDRT_TONESCALE_PRESET.opendrt_tonescale_marvelous=Marvelous
 +value.OPENDRT_TONESCALE_PRESET.opendrt_tonescale_dagrinchi=Dagrinchi
 +option.OPENDRT_MIDDLE_GREY=OpenDRT Middle Grey
-+suffix.OPENDRT_MIDDLE_GREY= nits
++suffix.OPENDRT_MIDDLE_GREY= nits
  option.AGX_EV=AgX Dynamic Range
  suffix.AGX_EV=EV
  option.AGX_HDR_EV=AgX HDR Dynamic Range
 diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/OpenDRT.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/OpenDRT.glsl"
 --- "iterationRP Alpha 0.8.26/shaders/Lib/OpenDRT.glsl"	1970-01-01 01:00:00.000000000 +0100
-+++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/OpenDRT.glsl"	2026-08-01 21:52:52.139101668 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/OpenDRT.glsl"	2026-08-01 22:10:38.499192294 +0200
 @@ -0,0 +1,615 @@
 +/* OpenDRT v1.1.0 for GLSL
 + *
@@ -655,7 +655,7 @@ diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/OpenDRT.glsl" "iterationRP Alph
 +}
 diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Programs/Final_FS.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/Programs/Final_FS.glsl"
 --- "iterationRP Alpha 0.8.26/shaders/Lib/Programs/Final_FS.glsl"	2026-07-19 17:48:48.000000000 +0200
-+++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-08-01 21:53:14.282444087 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Programs/Final_FS.glsl"	2026-08-01 22:10:38.499463733 +0200
 @@ -5,6 +5,7 @@
  
  #include "/Lib/UniformDeclare.glsl"
@@ -762,7 +762,7 @@ diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Programs/Final_FS.glsl" "iterat
  
 diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Settings.glsl" "iterationRP Alpha 0.8.26 patched/shaders/Lib/Settings.glsl"
 --- "iterationRP Alpha 0.8.26/shaders/Lib/Settings.glsl"	2026-07-22 07:39:26.000000000 +0200
-+++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Settings.glsl"	2026-08-01 21:53:03.835282558 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/Lib/Settings.glsl"	2026-08-01 22:10:38.499709369 +0200
 @@ -711,7 +711,10 @@
    //#define GLARE_FLARE_SHADOWBASED
  
@@ -777,7 +777,7 @@ diff -urwN "iterationRP Alpha 0.8.26/shaders/Lib/Settings.glsl" "iterationRP Alp
  	#define AGX_HDR_MIDGREY		0.16 // [0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3]
 diff -urwN "iterationRP Alpha 0.8.26/shaders/shaders.properties" "iterationRP Alpha 0.8.26 patched/shaders/shaders.properties"
 --- "iterationRP Alpha 0.8.26/shaders/shaders.properties"	2026-07-22 07:43:48.000000000 +0200
-+++ "iterationRP Alpha 0.8.26 patched/shaders/shaders.properties"	2026-08-01 22:07:27.398415838 +0200
++++ "iterationRP Alpha 0.8.26 patched/shaders/shaders.properties"	2026-08-01 22:10:38.499921908 +0200
 @@ -1082,6 +1082,8 @@
  
  
